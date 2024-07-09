@@ -1,0 +1,50 @@
+---
+- name: Run all the roles!
+  hosts: localhost
+  connection: local
+
+  vars:
+    # Just an example.  Anything you need on all your hosts. Monitoring maybe?
+    common_unconditional_roles:
+      - users
+      - packages
+
+  tasks:
+
+    - name: Get VIRTUAL_ENV if exists
+      ansible.builtin.command: "echo $VIRTUAL_ENV"
+      register: venv_output
+      changed_when: false
+
+    - name: Queries
+      block:
+        - name: Query available roles from venv
+          ansible.builtin.command: "ansible-galaxy list --roles-path {{ venv_output.stdout | dirname }}/roles"
+          changed_when: false
+          register: _available_roles
+      rescue:
+        - name: Query available roles
+          ansible.builtin.command: "ansible-galaxy list"
+          changed_when: false
+          register: _available_roles
+
+    - name: Show available roles
+      ansible.builtin.debug:
+        msg: "{{ _available_roles | to_nice_yaml }}"
+        verbosity: 2
+
+    - name: Include roles unconditionally
+      ansible.builtin.include_role:
+        name: "{{ item }}"
+      loop: "{{  common_unconditional_roles }}"
+      when: item in _available_roles.stdout
+
+    - name: Include roles based on group membership
+      ansible.builtin.include_role:
+        name: "{{ item }}"
+      loop: "{{ group_names }}"
+      when: item in _available_roles.stdout
+
+    - name: Done
+      ansible.builtin.debug:
+        msg: 'All needed roles have run. Done!'
